@@ -34,13 +34,19 @@ Las dos máquinas son VMs de VMware Workstation con dos tarjetas: una en modo Br
 
 Creé una VM nueva con Debian 13 y la misma configuración de red que el maestro: Network Adapter en Bridged y Network Adapter 2 en Host-only.
 
+![Hardware de la VM: adaptador Bridged y adaptador Host-only.](img/figura01.png)
+
 *Figura 1. Hardware de la VM: adaptador Bridged y adaptador Host-only.*
 
 Durante la instalación puse `debian-dns2` como nombre de máquina y `daniel.lan` como dominio, el mismo que el maestro.
 
+![Nombre de la máquina en el instalador.](img/figura02.png)
+
 *Figura 2. Nombre de la máquina en el instalador.*
 
 En la selección de programas solo marqué el servidor SSH y las utilidades estándar. Un servidor DNS no necesita entorno gráfico.
+
+![Selección de programas: sin escritorio, con SSH.](img/figura03.png)
 
 *Figura 3. Selección de programas: sin escritorio, con SSH.*
 
@@ -56,9 +62,13 @@ iface ens37 inet static
     netmask 255.255.255.0
 ```
 
+![Configuración de ens37 en /etc/network/interfaces.](img/figura04.png)
+
 *Figura 4. Configuración de `ens37` en `/etc/network/interfaces`.*
 
 La activé con `ifup ens37` y comprobé con `ip a` que estaba UP con su IP.
+
+![ens37 activa con 192.168.1.11/24.](img/figura05.png)
 
 *Figura 5. `ens37` activa con `192.168.1.11/24`.*
 
@@ -69,6 +79,8 @@ Como en la instalación ya puse el nombre y el dominio, `/etc/hostname` contiene
 ```text
 127.0.1.1       debian-dns2.daniel.lan  debian-dns2
 ```
+
+![Fichero /etc/hosts del esclavo.](img/figura06.png)
 
 *Figura 6. Fichero `/etc/hosts` del esclavo.*
 
@@ -81,6 +93,8 @@ apt update && apt install bind9 bind9utils bind9-doc rsync -y
 ```
 
 Trabajo como root (`su -`), así que los comandos van sin `sudo`. En Debian 13 se instala BIND 9.20 y el servicio real se llama `named` (`bind9` es un alias).
+
+![Instalación de BIND9 completada y comprobación del hostname.](img/figura07.png)
 
 *Figura 7. Instalación de BIND9 completada y comprobación del hostname.*
 
@@ -105,9 +119,13 @@ options {
 };
 ```
 
+![named.conf.options del esclavo.](img/figura08.png)
+
 *Figura 8. `named.conf.options` del esclavo.*
 
 Con `named-checkconf` compruebo que la sintaxis es correcta (si no muestra nada, está bien) y con `systemctl status bind9` que el servicio está activo.
+
+![BIND activo y named-checkconf sin errores.](img/figura09.png)
 
 *Figura 9. BIND activo y `named-checkconf` sin errores.*
 
@@ -131,6 +149,8 @@ zone "1.168.192.in-addr.arpa" {
 };
 ```
 
+![named.conf.local del esclavo con las dos zonas slave.](img/figura10.png)
+
 *Figura 10. `named.conf.local` del esclavo con las dos zonas slave.*
 
 Creo la carpeta donde BIND guardará las zonas copiadas y le doy como propietario al usuario `bind`:
@@ -146,6 +166,8 @@ chown bind:bind /var/cache/bind/slaves
 systemctl restart bind9
 ls -l /var/cache/bind/slaves
 ```
+
+![La carpeta de zonas esclavas todavía vacía.](img/figura11.png)
 
 *Figura 11. La carpeta de zonas esclavas todavía vacía.*
 
@@ -171,17 +193,23 @@ zone "1.168.192.in-addr.arpa" {
 };
 ```
 
+![named.conf.local del maestro con allow-transfer.](img/figura12.png)
+
 *Figura 12. `named.conf.local` del maestro con `allow-transfer`.*
 
 ### 10.2 Zona directa
 
 En `/etc/bind/db.daniel.lan` añado el esclavo como segundo servidor de nombres (registro **NS**) y su registro **A**. También subo el **serial de 3 a 4**.
 
+![Zona directa con el NS y el A de debian-dns2 (serial 4).](img/figura13.png)
+
 *Figura 13. Zona directa con el NS y el A de `debian-dns2` (serial 4).*
 
 ### 10.3 Zona inversa
 
 En `/etc/bind/db.1.168.192` añado el NS del esclavo y su **PTR** (`11 → debian-dns2`), y subo el **serial de 2 a 3**.
+
+![Zona inversa con el NS y el PTR del esclavo (serial 3).](img/figura14.png)
 
 *Figura 14. Zona inversa con el NS y el PTR del esclavo (serial 3).*
 
@@ -193,6 +221,8 @@ named-checkzone 1.168.192.in-addr.arpa /etc/bind/db.1.168.192
 named-checkconf
 rndc reload
 ```
+
+![Las dos zonas cargan correctamente y BIND se recarga.](img/figura15.png)
 
 *Figura 15. Las dos zonas cargan correctamente y BIND se recarga.*
 
@@ -206,17 +236,23 @@ rndc retransfer 1.168.192.in-addr.arpa
 ls -l /var/cache/bind/slaves
 ```
 
+![Zonas copiadas en el esclavo.](img/figura16.png)
+
 *Figura 16. Zonas copiadas en el esclavo.*
 
 ## 11. Paso 7: Comprobaciones
 
 ### 11.1 Conectividad entre servidores
 
+![El maestro llega al esclavo por la red interna.](img/figura17.png)
+
 *Figura 17. El maestro llega al esclavo por la red interna.*
 
 ### 11.2 El esclavo responde con autoridad
 
 Consultando al esclavo (`dig @192.168.1.11`) la respuesta es la misma que la del maestro, con el flag **aa** (*authoritative answer*). Esto indica que el esclavo es servidor autoritativo de la zona y no está reenviando la consulta.
+
+![A la izquierda responde el esclavo (.11) y a la derecha el maestro (.10).](img/figura18.png)
 
 *Figura 18. A la izquierda responde el esclavo (`.11`) y a la derecha el maestro (`.10`).*
 
@@ -228,6 +264,8 @@ Para probar la sincronización, en el esclavo dejé abiertos los logs con `journ
 sentinel    IN  A       192.168.1.25
 ```
 
+![Registro sentinel añadido y serial 5 en el maestro.](img/figura19.png)
+
 *Figura 19. Registro `sentinel` añadido y serial 5 en el maestro.*
 
 Al reiniciar el maestro (`systemctl restart bind9`), en los logs del esclavo se ve el proceso completo:
@@ -236,6 +274,8 @@ Al reiniciar el maestro (`systemctl restart bind9`), en los logs del esclavo se 
 - Empieza la transferencia (*Transfer started*).
 - Termina con éxito: *Transfer completed: 9 records … (serial 5)*.
 - La zona inversa responde *zone is up to date* porque no se modificó.
+
+![Logs del esclavo: NOTIFY y transferencia completada (serial 5).](img/figura20.png)
 
 *Figura 20. Logs del esclavo: NOTIFY y transferencia completada (serial 5).*
 
@@ -246,6 +286,8 @@ rndc sync
 dig @192.168.1.10 sentinel.daniel.lan
 dig @192.168.1.11 sentinel.daniel.lan
 ```
+
+![sentinel.daniel.lan resuelve a 192.168.1.25 en los dos servidores.](img/figura21.png)
 
 *Figura 21. `sentinel.daniel.lan` resuelve a `192.168.1.25` en los dos servidores.*
 
