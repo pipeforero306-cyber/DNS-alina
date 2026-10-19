@@ -60,3 +60,37 @@ journalctl -xeu bind9                         →  "Transfer completed"
 ls /var/cache/bind/slaves                     →  aparecen las dos zonas
 dig @192.168.1.10 y @192.168.1.11 daniel.lan  →  misma respuesta
 ```
+
+## Preguntas para estudiar el tema
+
+Como pedía la actividad, le pedimos a la IA un conjunto de 10 preguntas para repasar DNS. Las dejamos aquí con una respuesta corta para poder estudiarlas.
+
+**1. ¿Qué es el DNS y para qué sirve?**
+Traduce nombres de dominio (`daniel.lan`) a direcciones IP y al revés, para no tener que memorizar números.
+
+**2. ¿Qué diferencia hay entre un servidor autoritativo y uno recursivo?**
+El autoritativo contesta solo sobre las zonas que gestiona. El recursivo busca la respuesta preguntando a otros servidores (raíz o forwarders) y la guarda en caché.
+
+**3. ¿Qué diferencia hay entre la zona directa y la inversa?**
+La directa convierte nombres en IP (`daniel.lan`). La inversa convierte IP en nombres (`1.168.192.in-addr.arpa`) y usa registros PTR.
+
+**4. ¿Para qué sirven los registros A, NS, SOA, PTR y CNAME?**
+A: nombre a IP. NS: qué servidores llevan la zona. SOA: datos de la zona, incluido el serial. PTR: IP a nombre. CNAME: un alias que apunta a otro nombre.
+
+**5. ¿Qué hace el servidor maestro y qué hace el esclavo? ¿Por qué tener los dos?**
+El maestro tiene la zona original y es donde se edita. El esclavo guarda una copia. Con los dos, si el maestro se cae, el esclavo sigue contestando.
+
+**6. ¿Cómo se sincronizan maestro y esclavo?**
+El maestro avisa con NOTIFY cuando hay cambios y el esclavo pide la zona completa con una transferencia AXFR.
+
+**7. ¿Por qué hay que subir el serial del SOA después de cambiar una zona?**
+El esclavo compara el serial con el que ya tiene. Si no sube, cree que no hay cambios y no pide la transferencia.
+
+**8. ¿Qué hace `allow-transfer` y por qué conviene limitarlo?**
+Indica quién puede pedir una copia de la zona. Si se deja abierto, cualquiera podría descargar todos los nombres de la red, así que lo limitamos a la IP del esclavo.
+
+**9. ¿Qué hacen `recursion no;` y `allow-recursion`?**
+`recursion no;` apaga la recursividad en un servidor autoritativo público, para que no lo usen en ataques de amplificación. `allow-recursion` deja la recursividad solo a los rangos de la organización.
+
+**10. ¿Qué comandos usamos para comprobar que todo funciona?**
+`named-checkconf` y `named-checkzone` para revisar la configuración y las zonas, `rndc reload` para recargar, `journalctl -xeu bind9` para ver los logs y `dig @IP dominio` para comparar las respuestas de maestro y esclavo.
