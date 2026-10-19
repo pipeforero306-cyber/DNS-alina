@@ -24,8 +24,39 @@ Para que solo contesten a los rangos de la organización se usa `allow-recursion
 allow-recursion { 127.0.0.1; 192.168.1.0/24; };
 ```
 
-## Infografía de la práctica
+## Infografía: DNS maestro y esclavo con BIND9
+
+Dominio `daniel.lan` · Debian 13 · BIND 9.20 · VMware
 
 En la práctica montamos un servidor DNS esclavo (`debian-dns2`) que copia las zonas del maestro (`debian-dns`). Este es el resumen de lo que hicimos. El detalle paso a paso está en el [README principal](../README.md).
 
-![Infografía: DNS maestro y esclavo con BIND9](img/infografia.png)
+```mermaid
+flowchart LR
+    M["<b>MAESTRO</b><br/>debian-dns<br/>192.168.1.10"]
+    E["<b>ESCLAVO</b><br/>debian-dns2<br/>192.168.1.11"]
+    M -- "NOTIFY (hay cambios)" --> E
+    E -- "AXFR (pide la zona)" --> M
+    style M fill:#2F6DB5,stroke:#2F6DB5,color:#ffffff
+    style E fill:#D9811A,stroke:#D9811A,color:#ffffff
+```
+
+Zonas que se copian: `daniel.lan` y `1.168.192.in-addr.arpa`.
+
+### Lo que hicimos
+
+| Paso | Qué hicimos | Detalle |
+|:---:|---|---|
+| 1 | Creamos la VM del esclavo | `debian-dns2`, IP fija `192.168.1.11` en la red interna |
+| 2 | Instalamos BIND9 | `apt install bind9 bind9utils bind9-doc` |
+| 3 | Opciones del servidor | `allow-query` (localhost y `192.168.1.0/24`) y forwarders `1.1.1.1` y `8.8.8.8` |
+| 4 | Zonas esclavas | `type slave` y `masters { 192.168.1.10; }` en `named.conf.local` |
+| 5 | Permiso en el maestro | `allow-transfer` solo para `192.168.1.11`, y registros NS y A del esclavo |
+| 6 | Subir el serial | `daniel.lan` de 3 a 4 y la inversa de 2 a 3. Si no, no hay transferencia |
+
+### Comprobación
+
+```
+journalctl -xeu bind9                         →  "Transfer completed"
+ls /var/cache/bind/slaves                     →  aparecen las dos zonas
+dig @192.168.1.10 y @192.168.1.11 daniel.lan  →  misma respuesta
+```
